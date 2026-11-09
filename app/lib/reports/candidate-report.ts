@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import { Resend } from "resend";
 import { rehydrateArtifactTexts } from "@/app/lib/artifacts";
 import { db } from "@/app/lib/db";
-import { aggregateScore } from "@/app/lib/domain/score";
+import { overallScoreForScorecard, parseRubricWeights, type RubricWeights } from "@/app/lib/domain/rubric";
 import { env } from "@/app/lib/env";
 import { callout, ctaButton, emailShell, escapeHtml, metadataTable } from "@/app/lib/email/brand";
 import { logAttemptEvent } from "@/app/lib/events";
@@ -41,6 +41,8 @@ type CandidateReportData = {
   dueAt: Date | null;
   finalNotes: string | null;
   scorecard: ReportScorecard;
+  /** Template's custom rubric weights; null → legacy equal weighting. */
+  scoringWeights?: RubricWeights | null;
   evalRuns: ReportEvalRun[];
   artifacts: ReportArtifact[];
   eventLogs: ReportEventLog[];
@@ -95,20 +97,9 @@ function cleanAssessmentTitle(value: string) {
   return cleaned.replace(/^([A-Z0-9]+) Product Build:\s*(.+?)\s+Product Build$/i, "$1 Product Build: $2");
 }
 
-function scoreSummary(scorecard: ReportScorecard) {
+function scoreSummary(scorecard: ReportScorecard, weights?: RubricWeights | null) {
   if (!scorecard) return "Pending";
-  return String(
-    scorecard.reviewerOverrideScore ??
-      aggregateScore({
-        requirements: scorecard.requirements,
-        testAndEvalQuality: scorecard.testAndEvalQuality,
-        debuggingDiscipline: scorecard.debuggingDiscipline,
-        codeQuality: scorecard.codeQuality,
-        aiCollaboration: scorecard.aiCollaboration,
-        productionReadiness: scorecard.productionReadiness,
-        communication: scorecard.communication
-      })
-  );
+  return String(overallScoreForScorecard(scorecard, weights));
 }
 
 function recommendation(score: number | null) {
@@ -119,9 +110,9 @@ function recommendation(score: number | null) {
   return { label: "NO HIRE", reason: "Insufficient evidence for the target role." };
 }
 
-function numericScore(scorecard: ReportScorecard) {
+function numericScore(scorecard: ReportScorecard, weights?: RubricWeights | null) {
   if (!scorecard) return null;
-  return Number(scoreSummary(scorecard));
+  return Number(scoreSummary(scorecard, weights));
 }
 
 function wrapText(text: string, maxChars: number) {
@@ -263,13 +254,13 @@ function gptEvaluatorFromReport(data: CandidateReportData) {
 }
 
 const reportColors = {
-  bg: "#fbfaf7",
+  bg: "#F5F1E6",
   panel: "#ffffff",
-  soft: "#f6f5f1",
-  ink: "#1a1a1a",
-  muted: "#555555",
-  line: "#dedbd2",
-  green: "#1f7a4d",
+  soft: "#ECE7D8",
+  ink: "#0A0B0A",
+  muted: "#4A4D48",
+  line: "#D9D3C2",
+  green: "#1E4D3A",
   yellow: "#a66a00",
   red: "#a52222"
 };
@@ -323,17 +314,19 @@ function sectionNarrative(label: string, value: number) {
   return "Weak signal for this dimension and a material contributor to the final recommendation.";
 }
 
-function sectionRows(scorecard: ReportScorecard) {
+function sectionRows(scorecard: ReportScorecard, weights?: RubricWeights | null) {
   if (!scorecard) return [];
-  return [
-    { label: "Requirements correctness", value: scorecard.requirements },
-    { label: "Test and eval quality", value: scorecard.testAndEvalQuality },
-    { label: "Debugging discipline", value: scorecard.debuggingDiscipline },
-    { label: "Code quality", value: scorecard.codeQuality },
-    { label: "AI collaboration judgment", value: scorecard.aiCollaboration },
-    { label: "Production readiness", value: scorecard.productionReadiness },
-    { label: "Communication", value: scorecard.communication }
-  ];
+  const rows = [
+    { key: "requirements", label: "Requirements correctness", value: scorecard.requirements },
+    { key: "testAndEvalQuality", label: "Test and eval quality", value: scorecard.testAndEvalQuality },
+    { key: "debuggingDiscipline", label: "Debugging discipline", value: scorecard.debuggingDiscipline },
+    { key: "codeQuality", label: "Code quality", value: scorecard.codeQuality },
+    { key: "aiCollaboration", label: "AI collaboration judgment", value: scorecard.aiCollaboration },
+    { key: "productionReadiness", label: "Production readiness", value: scorecard.productionReadiness },
+    { key: "communication", label: "Communication", value: scorecard.communication }
+  ] as const;
+  // weight is only set for templates with a custom rubric (null → equal weighting).
+  return rows.map((row) => ({ label: row.label, value: row.value, weight: weights ? weights[row.key] : null }));
 }
 
 type PdfFont = "F1" | "F2";
@@ -368,7 +361,7 @@ class DesignedPdf {
     if (stroke) this.stream.push(`q 0.7 w ${hexRgb(stroke)} RG ${x} ${y} ${width} ${height} re S Q`);
   }
 
-  text(text: string, x: number, top: number, size = 10, font: PdfFont = "F1", color = "#111827") {
+  text(text: string, x: number, top: number, size = 10, font: PdfFont = "F1", color = "#0A0B0A") {
     this.stream.push(`BT ${hexRgb(color)} rg /${font} ${size} Tf ${x} ${this.pdfY(top)} Td (${escapePdfText(text)}) Tj ET`);
   }
 
@@ -377,19 +370,19 @@ class DesignedPdf {
     const lineGap = options?.lineGap ?? size + 4;
     let y = top;
     for (const line of wrapText(text, maxChars)) {
-      this.text(line, x, y, size, options?.font ?? "F1", options?.color ?? "#111827");
+      this.text(line, x, y, size, options?.font ?? "F1", options?.color ?? "#0A0B0A");
       y += lineGap;
     }
     return y;
   }
 
   card(x: number, top: number, width: number, height: number) {
-    this.rect(x, top, width, height, "#ffffff", "#dbe3ef");
+    this.rect(x, top, width, height, "#ffffff", "#D9D3C2");
   }
 
   footer() {
     this.pages.forEach((page, index) => {
-      page.push(`BT ${hexRgb("#64748b")} rg /F1 8 Tf 40 24 Td (${escapePdfText(`Proofwork Assessment Report | Page ${index + 1}`)}) Tj ET`);
+      page.push(`BT ${hexRgb("#5C605A")} rg /F1 8 Tf 40 24 Td (${escapePdfText(`Proofwork Assessment Report | Page ${index + 1}`)}) Tj ET`);
     });
   }
 
@@ -429,24 +422,24 @@ class DesignedPdf {
   }
 }
 
-function drawMetricCard(pdf: DesignedPdf, x: number, top: number, width: number, label: string, value: string, accent = "#0f766e") {
+function drawMetricCard(pdf: DesignedPdf, x: number, top: number, width: number, label: string, value: string, accent = "#1E4D3A") {
   pdf.card(x, top, width, 76);
-  pdf.text(label.toUpperCase(), x + 16, top + 24, 8, "F2", "#64748b");
+  pdf.text(label.toUpperCase(), x + 16, top + 24, 8, "F2", "#5C605A");
   pdf.text(value, x + 16, top + 52, 18, "F2", accent);
 }
 
 function drawScoreBar(pdf: DesignedPdf, x: number, top: number, label: string, value: number) {
   const color = metricColor(value);
-  pdf.text(label, x, top + 10, 9, "F1", "#334155");
-  pdf.rect(x + 150, top, 150, 10, "#e5e7eb");
+  pdf.text(label, x, top + 10, 9, "F1", "#2B2E2A");
+  pdf.rect(x + 150, top, 150, 10, "#D9D3C2");
   pdf.rect(x + 150, top, Math.max(4, (value / 5) * 150), 10, color);
   pdf.text(`${value}/5`, x + 314, top + 10, 9, "F2", color);
 }
 
 function drawEvidenceItem(pdf: DesignedPdf, x: number, top: number, label: string, ok: boolean) {
-  pdf.rect(x, top, 12, 12, ok ? "#dcfce7" : "#fee2e2", ok ? "#86efac" : "#fecaca");
-  pdf.text(ok ? "OK" : "!", x + 2, top + 10, 6, "F2", ok ? "#047857" : "#dc2626");
-  pdf.wrapped(label, x + 20, top + 10, 25, { size: 9, color: "#334155", lineGap: 12 });
+  pdf.rect(x, top, 12, 12, ok ? "#DCEBE1" : "#fee2e2", ok ? "#8CC2A4" : "#fecaca");
+  pdf.text(ok ? "OK" : "!", x + 2, top + 10, 6, "F2", ok ? "#1E4D3A" : "#dc2626");
+  pdf.wrapped(label, x + 20, top + 10, 25, { size: 9, color: "#2B2E2A", lineGap: 12 });
 }
 
 function buildDesignedPdf(data: CandidateReportData) {
@@ -460,30 +453,30 @@ function buildDesignedPdf(data: CandidateReportData) {
       .values()
   );
   const pdf = new DesignedPdf();
-  const score = numericScore(data.scorecard);
+  const score = numericScore(data.scorecard, data.scoringWeights);
   const rec = recommendation(score);
   const recStyle = statusPill(score);
   const visibleCounts = parseTestCounts(outputForLabel(data.artifacts, "Test output"));
   const hiddenCounts = parseTestCounts(outputForLabel(data.artifacts, "Hidden test output"));
   const proctoringEvents = data.eventLogs.filter((event) => event.type.startsWith("proctoring."));
 
-  pdf.rect(0, 0, 612, 112, "#111827");
-  pdf.text("PROOFWORK ASSESSMENT REPORT", 40, 38, 9, "F2", "#99f6e4");
+  pdf.rect(0, 0, 612, 112, "#0A0B0A");
+  pdf.text("PROOFWORK ASSESSMENT REPORT", 40, 38, 9, "F2", "#8CC2A4");
   pdf.wrapped(data.candidateName, 40, 68, 28, { size: 24, font: "F2", color: "#ffffff", lineGap: 28 });
-  pdf.text(data.candidateEmail, 40, 96, 10, "F1", "#cbd5e1");
+  pdf.text(data.candidateEmail, 40, 96, 10, "F1", "#D9D3C2");
   pdf.rect(430, 36, 142, 38, recStyle.fill);
   pdf.text(rec.label, 450, 60, 14, "F2", recStyle.text);
 
   drawMetricCard(pdf, 40, 136, 122, "Score", score === null ? "Pending" : `${score}/100`, recStyle.fill);
-  drawMetricCard(pdf, 176, 136, 178, "Status", data.status, "#111827");
-  drawMetricCard(pdf, 368, 136, 204, "Assessment", cleanAssessmentTitle(data.assessmentTitle).replace(/^SDE2 Product Build:\s*/i, ""), "#111827");
+  drawMetricCard(pdf, 176, 136, 178, "Status", data.status, "#0A0B0A");
+  drawMetricCard(pdf, 368, 136, 204, "Assessment", cleanAssessmentTitle(data.assessmentTitle).replace(/^SDE2 Product Build:\s*/i, ""), "#0A0B0A");
 
   pdf.card(40, 232, 532, 92);
-  pdf.text("Decision rationale", 58, 260, 12, "F2", "#111827");
-  pdf.wrapped(decisionSummary(data, score), 58, 284, 83, { size: 10, color: "#334155", lineGap: 14 });
+  pdf.text("Decision rationale", 58, 260, 12, "F2", "#0A0B0A");
+  pdf.wrapped(decisionSummary(data, score), 58, 284, 83, { size: 10, color: "#2B2E2A", lineGap: 14 });
 
   pdf.card(40, 344, 328, 230);
-  pdf.text("Score breakdown", 58, 372, 13, "F2", "#111827");
+  pdf.text("Score breakdown", 58, 372, 13, "F2", "#0A0B0A");
   if (data.scorecard) {
     const rows: Array<[string, number]> = [
       ["Requirements correctness", data.scorecard.requirements],
@@ -496,11 +489,11 @@ function buildDesignedPdf(data: CandidateReportData) {
     ];
     rows.forEach(([label, value], index) => drawScoreBar(pdf, 58, 400 + index * 22, label, value));
   } else {
-    pdf.text("Scorecard pending.", 58, 404, 10, "F1", "#64748b");
+    pdf.text("Scorecard pending.", 58, 404, 10, "F1", "#5C605A");
   }
 
   pdf.card(386, 344, 186, 230);
-  pdf.text("Key evidence", 404, 372, 13, "F2", "#111827");
+  pdf.text("Key evidence", 404, 372, 13, "F2", "#0A0B0A");
   drawEvidenceItem(
     pdf,
     404,
@@ -520,7 +513,7 @@ function buildDesignedPdf(data: CandidateReportData) {
   drawEvidenceItem(pdf, 404, 542, `${proctoringEvents.length} proctoring events captured`, proctoringEvents.length > 0);
 
   pdf.card(40, 594, 532, 116);
-  pdf.text("Assessment timeline", 58, 622, 13, "F2", "#111827");
+  pdf.text("Assessment timeline", 58, 622, 13, "F2", "#0A0B0A");
   const timeline = [
     ["Started", formatDate(data.startedAt)],
     ["Submitted", formatDate(data.submittedAt)],
@@ -529,55 +522,55 @@ function buildDesignedPdf(data: CandidateReportData) {
   ];
   timeline.forEach(([label, value], index) => {
     const x = 58 + index * 128;
-    pdf.rect(x, 650, 10, 10, "#0f766e");
-    pdf.text(label, x, 678, 9, "F2", "#111827");
-    pdf.wrapped(value, x, 696, 18, { size: 8, color: "#64748b", lineGap: 10 });
-    if (index < timeline.length - 1) pdf.rect(x + 16, 654, 96, 2, "#cbd5e1");
+    pdf.rect(x, 650, 10, 10, "#1E4D3A");
+    pdf.text(label, x, 678, 9, "F2", "#0A0B0A");
+    pdf.wrapped(value, x, 696, 18, { size: 8, color: "#5C605A", lineGap: 10 });
+    if (index < timeline.length - 1) pdf.rect(x + 16, 654, 96, 2, "#D9D3C2");
   });
 
   pdf.addPage();
-  pdf.text("Reviewer Summary", 40, 58, 18, "F2", "#111827");
+  pdf.text("Reviewer Summary", 40, 58, 18, "F2", "#0A0B0A");
   pdf.card(40, 84, 532, 108);
-  pdf.text("Candidate notes", 58, 112, 12, "F2", "#111827");
-  pdf.wrapped(data.finalNotes || "No final notes submitted.", 58, 138, 82, { size: 10, color: "#334155", lineGap: 14 });
+  pdf.text("Candidate notes", 58, 112, 12, "F2", "#0A0B0A");
+  pdf.wrapped(data.finalNotes || "No final notes submitted.", 58, 138, 82, { size: 10, color: "#2B2E2A", lineGap: 14 });
 
   pdf.card(40, 216, 532, 116);
-  pdf.text("Automated evaluation", 58, 244, 12, "F2", "#111827");
+  pdf.text("Automated evaluation", 58, 244, 12, "F2", "#0A0B0A");
   pdf.wrapped(latestEval?.summary ?? data.scorecard?.automatedSummary ?? "No eval summary recorded.", 58, 270, 82, {
     size: 10,
-    color: "#334155",
+    color: "#2B2E2A",
     lineGap: 14
   });
-  pdf.text(`Visible tests: ${JSON.stringify(latestEval?.visibleTests ?? {})}`, 58, 314, 8, "F1", "#64748b");
-  pdf.text(`Hidden tests: ${JSON.stringify(latestEval?.hiddenTests ?? {})}`, 58, 328, 8, "F1", "#64748b");
+  pdf.text(`Visible tests: ${JSON.stringify(latestEval?.visibleTests ?? {})}`, 58, 314, 8, "F1", "#5C605A");
+  pdf.text(`Hidden tests: ${JSON.stringify(latestEval?.hiddenTests ?? {})}`, 58, 328, 8, "F1", "#5C605A");
 
   if (proctoringEvents.length > 0) {
     pdf.card(40, 358, 532, 92);
-    pdf.text("Proctoring", 58, 386, 12, "F2", "#111827");
+    pdf.text("Proctoring", 58, 386, 12, "F2", "#0A0B0A");
     proctoringEvents.slice(0, 4).forEach((event, index) => {
       const metadata = event.metadata ? ` ${JSON.stringify(event.metadata)}` : "";
       pdf.wrapped(`${formatDate(event.createdAt)} | ${event.type}${metadata}`, 58, 412 + index * 16, 88, {
         size: 8,
-        color: "#334155",
+        color: "#2B2E2A",
         lineGap: 10
       });
     });
   }
 
   pdf.addPage();
-  pdf.text("Evidence Appendix", 40, 58, 18, "F2", "#111827");
+  pdf.text("Evidence Appendix", 40, 58, 18, "F2", "#0A0B0A");
   let y = 92;
   for (const artifact of latestByLabel) {
     if (artifact.label === reportArtifactLabel) continue;
     pdf.ensure(120);
     if (y > 680) {
       pdf.addPage();
-      pdf.text("Evidence Appendix", 40, 58, 18, "F2", "#111827");
+      pdf.text("Evidence Appendix", 40, 58, 18, "F2", "#0A0B0A");
       y = 92;
     }
-    pdf.text(artifact.label, 40, y, 12, "F2", "#111827");
+    pdf.text(artifact.label, 40, y, 12, "F2", "#0A0B0A");
     y += 18;
-    pdf.text(`${artifact.kind} | ${artifact.uri}`, 40, y, 8, "F1", "#64748b");
+    pdf.text(`${artifact.kind} | ${artifact.uri}`, 40, y, 8, "F1", "#5C605A");
     y += 16;
     const output = metadataOutput(artifact.metadata);
     const excerpt = output || `${artifact.kind} collected at ${formatDate(artifact.createdAt)}`;
@@ -586,7 +579,7 @@ function buildDesignedPdf(data: CandidateReportData) {
         pdf.addPage();
         y = 58;
       }
-      pdf.text(text, 40, y, 7, "F1", "#334155");
+      pdf.text(text, 40, y, 7, "F1", "#2B2E2A");
       y += 10;
     }
     y += 16;
@@ -631,7 +624,7 @@ function drawKitMetric(
   width: number,
   label: string,
   value: string,
-  color = "#111827"
+  color = "#0A0B0A"
 ) {
   drawKitCard(doc, x, y, width, 72);
   doc.font(fonts.bold).fontSize(8).fillColor(reportColors.muted).text(label.toUpperCase(), x + 16, y + 18, { width: width - 32, characterSpacing: 1.1 });
@@ -646,10 +639,14 @@ function drawKitBar(
   y: number,
   label: string,
   value: number,
-  width = 150
+  width = 150,
+  weight: number | null = null
 ) {
   const color = metricColor(value);
-  doc.font(fonts.regular).fontSize(9).fillColor(reportColors.ink).text(label, x, y, { width: 150 });
+  doc.font(fonts.regular).fontSize(9).fillColor(reportColors.ink).text(label, x, y, { width: weight === null ? 150 : 118 });
+  if (weight !== null) {
+    doc.font(fonts.regular).fontSize(8).fillColor(reportColors.muted).text(`${weight}%`, x + 120, y + 0.5, { width: 40, align: "right" });
+  }
   doc.rect(x + 166, y + 2, width, 8).fill(reportColors.soft);
   doc.rect(x + 166, y + 2, Math.max(6, (value / 5) * width), 8).fill(color);
   doc.font(fonts.bold).fontSize(9).fillColor(color).text(`${value}/5`, x + 326, y - 1, { width: 36, align: "right" });
@@ -663,7 +660,7 @@ function drawKitEvidence(
   label: string,
   ok: boolean
 ) {
-  doc.rect(x, y, 18, 18).fillAndStroke(ok ? "#edf7f1" : "#fff2f2", ok ? reportColors.green : reportColors.red);
+  doc.rect(x, y, 18, 18).fillAndStroke(ok ? "#DCEBE1" : "#fff2f2", ok ? reportColors.green : reportColors.red);
   doc.font(fonts.bold).fontSize(6.5).fillColor(ok ? reportColors.green : reportColors.red).text(ok ? "OK" : "!", x + 1, y + 5, { width: 16, align: "center" });
   doc.font(fonts.regular).fontSize(9).fillColor(reportColors.ink).text(label, x + 26, y + 1, { width: 138, lineGap: 2 });
 }
@@ -683,7 +680,7 @@ async function buildPdfKitReport(data: CandidateReportData) {
   const doc = new PDFDocument({ size: "LETTER", margin: 0, bufferPages: false });
   const done = pdfKitBuffer(doc);
   const fonts = registerReportFonts(doc);
-  const score = numericScore(data.scorecard);
+  const score = numericScore(data.scorecard, data.scoringWeights);
   const rec = recommendation(score);
   const recStyle = statusPill(score);
   const latestEval = data.evalRuns[0];
@@ -691,7 +688,7 @@ async function buildPdfKitReport(data: CandidateReportData) {
   const hiddenCounts = parseTestCounts(outputForLabel(data.artifacts, "Hidden test output"));
   const proctoringEvents = data.eventLogs.filter((event) => event.type.startsWith("proctoring."));
   const recordingCount = data.artifacts.filter((artifact) => artifact.kind === "proctoring_recording").length;
-  const rows = sectionRows(data.scorecard);
+  const rows = sectionRows(data.scorecard, data.scoringWeights);
   const promptQuality = promptQualityFromReport(data);
   const liveInterview = liveInterviewFromReport(data);
   const interviewerFeedback = interviewerFeedbackFromReport(data);
@@ -726,7 +723,10 @@ async function buildPdfKitReport(data: CandidateReportData) {
 
   drawKitCard(doc, 40, 428, 342, 214);
   doc.font(fonts.bold).fontSize(14).fillColor(reportColors.ink).text("Section performance", 58, 450);
-  rows.forEach((row, index) => drawKitBar(doc, fonts, 58, 480 + index * 21, row.label, row.value, 146));
+  if (data.scoringWeights) {
+    doc.font(fonts.regular).fontSize(7.5).fillColor(reportColors.muted).text("Custom rubric · % = weight in overall score", 58, 467, { width: 300 });
+  }
+  rows.forEach((row, index) => drawKitBar(doc, fonts, 58, 480 + index * 21, row.label, row.value, 146, row.weight));
 
   drawKitCard(doc, 402, 428, 170, 214);
   doc.font(fonts.bold).fontSize(14).fillColor(reportColors.ink).text("Evidence", 420, 450);
@@ -1089,6 +1089,7 @@ export async function buildCandidateReportPdf(attemptId: string) {
       dueAt: attempt.dueAt,
       finalNotes: attempt.finalNotes,
       scorecard: attempt.scorecard,
+      scoringWeights: parseRubricWeights(attempt.template.scoringWeights),
       evalRuns: attempt.evalRuns,
       artifacts: attempt.artifacts,
       eventLogs: attempt.events
@@ -1114,7 +1115,7 @@ export async function sendCandidateReportEmail(attemptId: string) {
     }
   });
 
-  const score = numericScore(attempt.scorecard);
+  const score = numericScore(attempt.scorecard, parseRubricWeights(attempt.template.scoringWeights));
   const latestReportArtifact = [...attempt.artifacts]
     .reverse()
     .find((artifact) => artifact.kind === "reviewer_export" && artifact.label === reportArtifactLabel);
@@ -1182,7 +1183,7 @@ export async function sendCandidateReportEmail(attemptId: string) {
     preheader: `${attempt.candidate.name}'s assessment report is ready: ${rec.label}.`,
     eyebrow: "Proofwork report",
     title: `${attempt.candidate.name}'s report is ready.`,
-    intro: `The evidence package for <strong style="color:#1a1a1a;">${candidateName}</strong>'s <strong style="color:#1a1a1a;">${assessmentTitle}</strong> attempt is attached as a PDF.`,
+    intro: `The evidence package for <strong style="color:#0A0B0A;">${candidateName}</strong>'s <strong style="color:#0A0B0A;">${assessmentTitle}</strong> attempt is attached as a PDF.`,
     body: `
       ${metadataTable([
         ["Candidate", `${attempt.candidate.name} <${attempt.candidate.email}>`],
@@ -1196,7 +1197,7 @@ export async function sendCandidateReportEmail(attemptId: string) {
         `${escapeHtml(rec.reason)} ${escapeHtml(recordingText.trim())}${skippedText ? ` ${escapeHtml(skippedText.trim())}` : ""}`
       )}
       <div style="margin-top:28px;">${ctaButton("Open reviewer view", reportUrl)}</div>
-      <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#555555;">The attached PDF includes the candidate profile, section-level scores, timeline, eval results, artifacts, and reviewer-ready decision rationale.</p>
+      <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#4A4D48;">The attached PDF includes the candidate profile, section-level scores, timeline, eval results, artifacts, and reviewer-ready decision rationale.</p>
     `,
     footerNote: "Reviewer reports are generated automatically when an assessment is submitted or times out."
   });

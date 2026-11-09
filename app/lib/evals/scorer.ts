@@ -1,4 +1,5 @@
-import { aggregateScore, defaultRubric, normalizeScores, type ScoreDimensions } from "../domain/score.ts";
+import { defaultRubric, normalizeScores, type ScoreDimensions } from "../domain/score.ts";
+import { parseRubricWeights, weightedOverallScore, type RubricWeights } from "../domain/rubric.ts";
 
 type EvalSignal = {
   visiblePassed?: boolean;
@@ -325,15 +326,18 @@ export function scoreCapFromSignals(signals: EvalSignal) {
   };
 }
 
-export function applyScoreCaps(scores: ScoreDimensions, signals: EvalSignal) {
+export function applyScoreCaps(scores: ScoreDimensions, signals: EvalSignal, weights?: RubricWeights | null) {
   const cap = scoreCapFromSignals(signals);
   const capped = normalizeScores(scores);
+  const rubric = parseRubricWeights(weights ?? null);
   let safety = 100;
 
-  while (aggregateScore(capped) > cap.maxScore && safety > 0) {
+  // Caps apply to the (possibly weighted) overall score. With custom weights,
+  // only dimensions that carry weight can lower the total, so skip zero-weight ones.
+  while (weightedOverallScore(capped, rubric) > cap.maxScore && safety > 0) {
     const key = scoreKeys
-      .filter((candidate) => capped[candidate] > 0)
-      .sort((a, b) => capped[b] - capped[a])[0];
+      .filter((candidate) => capped[candidate] > 0 && (!rubric || rubric[candidate] > 0))
+      .sort((a, b) => capped[b] - capped[a] || (rubric ? rubric[b] - rubric[a] : 0))[0];
     if (!key) break;
     capped[key] -= 1;
     safety -= 1;
@@ -356,8 +360,13 @@ function seniorityBar(level?: string | null) {
   return { label: "sde1", expectedCommits: 3, excellentCommits: 4 };
 }
 
-export function summarizeScore(scores: ScoreDimensions, context: string, signals?: EvalSignal) {
-  const total = aggregateScore(scores);
+export function summarizeScore(
+  scores: ScoreDimensions,
+  context: string,
+  signals?: EvalSignal,
+  weights?: RubricWeights | null
+) {
+  const total = weightedOverallScore(scores, weights);
   const level = seniorityBar(signals?.assessmentLevel);
   const expectedCommits = signals?.minimumMeaningfulCommits ?? level.expectedCommits;
   const cap = signals ? scoreCapFromSignals(signals) : null;

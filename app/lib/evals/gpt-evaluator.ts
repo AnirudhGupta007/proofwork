@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { aggregateScore, normalizeScores, type ScoreDimensions } from "@/app/lib/domain/score";
+import { normalizeScores, type ScoreDimensions } from "@/app/lib/domain/score";
+import { parseRubricWeights, weightedOverallScore, type RubricWeights } from "@/app/lib/domain/rubric";
 import { applyScoreCaps } from "@/app/lib/evals/scorer";
+import { db } from "@/app/lib/db";
 import { env } from "@/app/lib/env";
 
 type EvidenceArtifact = {
@@ -25,7 +27,31 @@ type EvaluationInput = {
   events: Array<{ type: string; message: string; metadata?: unknown; createdAt?: Date | string }>;
   signals: Parameters<typeof applyScoreCaps>[1];
   heuristicScores: ScoreDimensions;
+  /** Template's custom rubric weights; null/undefined → legacy equal weighting. */
+  scoringWeights?: RubricWeights | null;
 };
+
+/**
+ * Resolves the rubric weights for an evaluation. Callers may pass them
+ * explicitly; when omitted (undefined) we look up the attempt's template so
+ * every evaluation path (inline jobs, Inngest) honours custom weights.
+ */
+async function resolveScoringWeights(input: EvaluationInput): Promise<RubricWeights | null> {
+  if (input.scoringWeights !== undefined) return parseRubricWeights(input.scoringWeights);
+  try {
+    const attempt = await db.attempt.findUnique({
+      where: { id: input.attemptId },
+      select: { template: { select: { scoringWeights: true } } }
+    });
+    return parseRubricWeights(attempt?.template?.scoringWeights ?? null);
+  } catch {
+    return null;
+  }
+}
+
+export function recommendationForScore(score: number) {
+  return score >= 78 ? "hire" : score >= 68 ? "lean_hire" : score >= 60 ? "lean_no_hire" : "no_hire";
+}
 
 const evaluatorSchema = z.object({
   scores: z.object({
@@ -181,26 +207,28 @@ function extractResponseText(response: unknown) {
     .join("");
 }
 
-function fallback(input: EvaluationInput, reason: string) {
-  const capped = applyScoreCaps(input.heuristicScores, input.signals);
+function fallback(input: EvaluationInput, reason: string, weights: RubricWeights | null) {
+  const capped = applyScoreCaps(input.heuristicScores, input.signals, weights);
+  const total = weightedOverallScore(capped.scores, weights);
   return {
     source: "heuristic" as const,
     model: null,
     scores: capped.scores,
     summary: `Heuristic evaluator used because GPT-5.5 evaluation was unavailable: ${reason}`,
-    decisionRationale: `Score ${aggregateScore(capped.scores)}/100 is based on deterministic evidence checks and guardrails. ${capped.cap.reasons.join(" ")}`,
+    decisionRationale: `Score ${total}/100 is based on deterministic evidence checks and guardrails. ${capped.cap.reasons.join(" ")}`,
     strengths: [],
     concerns: capped.cap.reasons,
     evidenceCitations: [],
-    recommendation: aggregateScore(capped.scores) >= 78 ? "hire" : aggregateScore(capped.scores) >= 68 ? "lean_hire" : aggregateScore(capped.scores) >= 60 ? "lean_no_hire" : "no_hire",
+    recommendation: recommendationForScore(total),
     cap: capped.cap
   };
 }
 
 export async function evaluateAttemptWithGpt(input: EvaluationInput) {
-  if (!env.OPENAI_API_KEY) return fallback(input, "OPENAI_API_KEY is not configured.");
+  const weights = await resolveScoringWeights(input);
+  if (!env.OPENAI_API_KEY) return fallback(input, "OPENAI_API_KEY is not configured.", weights);
 
-  const heuristicCap = applyScoreCaps(input.heuristicScores, input.signals).cap;
+  const heuristicCap = applyScoreCaps(input.heuristicScores, input.signals, weights).cap;
   const requestBody = {
     model: env.EVALUATION_MODEL,
     input: [
@@ -225,7 +253,8 @@ export async function evaluateAttemptWithGpt(input: EvaluationInput) {
             assessment: input.assessment,
             deterministicSignals: input.signals,
             heuristicScores: input.heuristicScores,
-            heuristicAggregate: aggregateScore(input.heuristicScores),
+            heuristicAggregate: weightedOverallScore(input.heuristicScores, weights),
+            scoringWeightsPercent: weights ?? "equal weighting across all seven dimensions",
             hardEvidenceCap: heuristicCap,
             evidence: evidenceBundle(input.artifacts),
             events: eventBundle(input.events)
@@ -257,7 +286,7 @@ export async function evaluateAttemptWithGpt(input: EvaluationInput) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    return fallback(input, `OpenAI evaluator failed: ${response.status} ${text.slice(0, 240)}`);
+    return fallback(input, `OpenAI evaluator failed: ${response.status} ${text.slice(0, 240)}`, weights);
   }
 
   const raw = await response.json();
@@ -266,13 +295,13 @@ export async function evaluateAttemptWithGpt(input: EvaluationInput) {
   try {
     json = JSON.parse(text);
   } catch {
-    return fallback(input, "OpenAI evaluator returned non-JSON output.");
+    return fallback(input, "OpenAI evaluator returned non-JSON output.", weights);
   }
 
   const parsed = evaluatorSchema.safeParse(json);
-  if (!parsed.success) return fallback(input, "OpenAI evaluator returned invalid score JSON.");
+  if (!parsed.success) return fallback(input, "OpenAI evaluator returned invalid score JSON.", weights);
 
-  const capped = applyScoreCaps(normalizeScores(parsed.data.scores), input.signals);
+  const capped = applyScoreCaps(normalizeScores(parsed.data.scores), input.signals, weights);
   return {
     source: "gpt-5.5" as const,
     model: env.EVALUATION_MODEL,

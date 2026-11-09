@@ -5,7 +5,7 @@ import { ScorecardForm } from "@/app/components/ScorecardForm";
 import { getAdminContext } from "@/app/lib/admin-context";
 import { rehydrateArtifactTexts } from "@/app/lib/artifacts";
 import { db } from "@/app/lib/db";
-import { aggregateScore } from "@/app/lib/domain/score";
+import { overallScoreForScorecard } from "@/app/lib/domain/rubric";
 
 export const dynamic = "force-dynamic";
 
@@ -87,16 +87,7 @@ export default async function AttemptDetailPage({ params }: { params: Promise<{ 
       .values()
   );
   const aggregate = scorecard
-    ? scorecard.reviewerOverrideScore ??
-      aggregateScore({
-        requirements: scorecard.requirements,
-        testAndEvalQuality: scorecard.testAndEvalQuality,
-        debuggingDiscipline: scorecard.debuggingDiscipline,
-        codeQuality: scorecard.codeQuality,
-        aiCollaboration: scorecard.aiCollaboration,
-        productionReadiness: scorecard.productionReadiness,
-        communication: scorecard.communication
-      })
+    ? overallScoreForScorecard(scorecard, attempt.template.scoringWeights)
     : null;
   const promptQuality = promptQualitySummary(latestArtifacts.find((artifact) => artifact.label === "Prompt quality analysis")?.metadata);
   const evaluationPlan =

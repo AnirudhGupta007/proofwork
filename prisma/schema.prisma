@@ -132,6 +132,9 @@ model AssessmentTemplate {
   evaluationPlan   Json?
   proctoringConfig Json?
   rubric           Json
+  // Custom scoring rubric: integer % per score dimension summing to 100.
+  // Null → legacy equal weighting (see app/lib/domain/rubric.ts).
+  scoringWeights   Json?
   hiddenTestsRef   String?
   isActive         Boolean      @default(true)
   invitations      Invitation[]

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateAssessmentFromJd } from "@/app/lib/assessment-generator";
@@ -6,6 +6,7 @@ import { getAdminContext } from "@/app/lib/admin-context";
 import { preflightAssessmentWorkspace } from "@/app/lib/assessment-preflight";
 import { db } from "@/app/lib/db";
 import { getWorkspaceProvider } from "@/app/lib/workspaces/provider";
+import { scoringWeightsSchema } from "./rubric-schema";
 
 const templateSchema = z.object({
   roleTitle: z.string().min(2),
@@ -29,7 +30,9 @@ const templateSchema = z.object({
     })
     .optional(),
   assessmentPrompt: z.string().optional(),
-  assessmentMode: z.enum(["solo", "live_guided"]).default("solo")
+  assessmentMode: z.enum(["solo", "live_guided"]).default("solo"),
+  // Custom scoring rubric; omitted/null → default (equal) weighting.
+  scoringWeights: scoringWeightsSchema.optional()
 });
 
 function zodMessage(err: z.ZodError) {
@@ -97,6 +100,7 @@ export async function POST(request: Request) {
           evaluationPlan: { ...generatedEvaluationPlan, preflight } as Prisma.InputJsonValue,
           proctoringConfig: generated.proctoringConfig as Prisma.InputJsonValue,
           rubric: generated.rubric as Prisma.InputJsonValue,
+          scoringWeights: input.scoringWeights ?? Prisma.DbNull,
           isActive: true
         }
       });

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AdminShell } from "@/app/components/AdminShell";
 import { getAdminContext } from "@/app/lib/admin-context";
 import { db } from "@/app/lib/db";
-import { aggregateScore } from "@/app/lib/domain/score";
+import { overallScoreForScorecard } from "@/app/lib/domain/rubric";
 
 export const dynamic = "force-dynamic";
 
@@ -86,16 +86,7 @@ export default async function AdminDashboard() {
                 </td>
                 <td>
                   {attempt.scorecard
-                    ? attempt.scorecard.reviewerOverrideScore ??
-                      aggregateScore({
-                        requirements: attempt.scorecard.requirements,
-                        testAndEvalQuality: attempt.scorecard.testAndEvalQuality,
-                        debuggingDiscipline: attempt.scorecard.debuggingDiscipline,
-                        codeQuality: attempt.scorecard.codeQuality,
-                        aiCollaboration: attempt.scorecard.aiCollaboration,
-                        productionReadiness: attempt.scorecard.productionReadiness,
-                        communication: attempt.scorecard.communication
-                      })
+                    ? overallScoreForScorecard(attempt.scorecard, attempt.template.scoringWeights)
                     : "Pending"}
                 </td>
                 <td>{attempt.updatedAt.toLocaleString()}</td>

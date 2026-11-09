@@ -1,6 +1,8 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { AdminShell } from "@/app/components/AdminShell";
 import { AssessmentTemplateActions } from "@/app/components/AssessmentTemplateActions";
+import { RubricWeightsEditor } from "@/app/components/RubricWeightsEditor";
 import { getAdminContext } from "@/app/lib/admin-context";
 import { db } from "@/app/lib/db";
 
@@ -121,6 +123,10 @@ export default async function AssessmentsPage() {
                 <p className="error-text">Review workspace failed: {reviewWorkspace.error}</p>
               ) : null}
 
+              <div className="button-row">
+                <Link className="button secondary" href={`/admin/assessments/${template.id}/compare` as Route}>Compare candidates</Link>
+              </div>
+
               <div className="template-detail-grid">
                 <div>
                   <p className="eyebrow">Eval focus</p>
@@ -139,6 +145,8 @@ export default async function AssessmentsPage() {
                   </ul>
                 </div>
               </div>
+
+              <RubricWeightsEditor templateId={template.id} initialWeights={template.scoringWeights} />
             </article>
           );
         })}

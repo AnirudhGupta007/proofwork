@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, CheckCircle2, FileText, FileUp, Github, Lightbulb, LockKeyhole, ShieldCheck, Wand2 } from "lucide-react";
+import { RubricWeightsFields } from "@/app/components/RubricWeightsEditor";
+import { DEFAULT_RUBRIC_WEIGHTS, rubricWeightsForStorage, rubricWeightsTotal, type RubricWeights } from "@/app/lib/domain/rubric";
 
 type DesignerStep = "jd" | "repo" | "assessment" | "invite";
 
@@ -116,6 +118,9 @@ export function AssessmentDesigner({ initialTemplate, initialIdeas = [] }: { ini
   const [githubSetupUrl, setGithubSetupUrl] = useState<string | null>(null);
   const [githubSetupSteps, setGithubSetupSteps] = useState<string[]>([]);
   const [step, setStep] = useState<DesignerStep>("jd");
+  const [scoringWeights, setScoringWeights] = useState<RubricWeights>({ ...DEFAULT_RUBRIC_WEIGHTS });
+  const scoringWeightsTotal = rubricWeightsTotal(scoringWeights);
+  const scoringWeightsValid = scoringWeightsTotal === 100;
   const projectModeSummary =
     repoSource === "generated"
       ? `New project brief: ${projectBrief.trim()}`
@@ -164,6 +169,10 @@ export function AssessmentDesigner({ initialTemplate, initialIdeas = [] }: { ini
   }
 
   async function generate() {
+    if (!scoringWeightsValid) {
+      setMessage(`Scoring rubric weights must add up to 100% (currently ${scoringWeightsTotal}%).`);
+      return;
+    }
     setBusy(true);
     setSaveStepIndex(0);
     setMessage(null);
@@ -183,7 +192,8 @@ export function AssessmentDesigner({ initialTemplate, initialIdeas = [] }: { ini
         assessmentIdea: selectedDetails?.id ?? selectedIdea ?? undefined,
         assessmentIdeaDetails: selectedDetails,
         assessmentPrompt,
-        assessmentMode
+        assessmentMode,
+        scoringWeights: rubricWeightsForStorage(scoringWeights)
       })
     });
     const payload = await response.json();
@@ -683,6 +693,14 @@ export function AssessmentDesigner({ initialTemplate, initialIdeas = [] }: { ini
         </>
       ) : null}
 
+      <div className="field rubric-section">
+        <label htmlFor="rubric-new-requirements">Scoring rubric</label>
+        <p className="muted">
+          Decide how much each criterion counts toward the overall 0-100 score. Weights must add up to 100%.
+        </p>
+        <RubricWeightsFields weights={scoringWeights} onChange={setScoringWeights} disabled={busy} idPrefix="rubric-new" />
+      </div>
+
       {busy ? (
         <div className="save-progress-panel" role="status" aria-live="polite">
           <div>
@@ -702,7 +720,7 @@ export function AssessmentDesigner({ initialTemplate, initialIdeas = [] }: { ini
         </div>
       ) : null}
 
-      <button className="button" type="button" onClick={generate} disabled={busy}>
+      <button className="button" type="button" onClick={generate} disabled={busy || !scoringWeightsValid}>
         {busy ? <span className="button-spinner" aria-hidden="true" /> : <Wand2 size={16} />}
         {busy ? "Saving assessment" : selectedIdea ? "Save selected assessment" : "Generate and save assessment"}
       </button>

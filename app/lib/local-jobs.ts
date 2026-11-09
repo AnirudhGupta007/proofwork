@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { persistArtifactPayloadsToR2 } from "@/app/lib/artifacts";
 import { db } from "@/app/lib/db";
-import { aggregateScore } from "@/app/lib/domain/score";
+import { parseRubricWeights, weightedOverallScore } from "@/app/lib/domain/rubric";
 import { evaluateAttemptWithGpt } from "@/app/lib/evals/gpt-evaluator";
 import {
   liveInterviewSignalsFromEvents,
@@ -304,6 +304,7 @@ export async function evaluateAttemptInline(attemptId: string) {
     minimumMeaningfulCommits: minimumMeaningfulCommits(attempt.template.evaluationPlan)
   };
   const heuristicScores = scoreAttemptFromSignals(scoreSignals);
+  const scoringWeights = parseRubricWeights(attempt.template.scoringWeights);
   const evaluator = await evaluateAttemptWithGpt({
     attemptId,
     candidate: { name: attempt.candidate.name, email: attempt.candidate.email },
@@ -318,7 +319,8 @@ export async function evaluateAttemptInline(attemptId: string) {
     artifacts,
     events: attempt.events,
     signals: scoreSignals,
-    heuristicScores
+    heuristicScores,
+    scoringWeights
   });
   const scores = evaluator.scores;
   const summary = evaluator.summary;
@@ -359,7 +361,8 @@ export async function evaluateAttemptInline(attemptId: string) {
   await logAttemptEvent(attemptId, "eval.completed", `Inline evaluation completed with ${evaluator.source}`, {
     model: evaluator.model,
     recommendation: evaluator.recommendation,
-    aggregate: aggregateScore(scores),
+    aggregate: weightedOverallScore(scores, scoringWeights),
+    scoringWeights,
     cap: evaluator.cap
   });
   await logAttemptEvent(attemptId, "eval.prompt_quality", promptQualitySignals.summary, promptQualitySignals);
