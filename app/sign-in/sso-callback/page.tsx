@@ -39,7 +39,7 @@ export default function SignInSsoCallbackPage() {
         <p className="eyebrow">Employer access</p>
         <h1>Finishing sign in.</h1>
         <p>We are verifying your session and opening the admin dashboard.</p>
-        {mounted && (
+        {mounted && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && (
           <AuthenticateWithRedirectCallback
             signInForceRedirectUrl="/admin"
             signInUrl="/sign-in"
