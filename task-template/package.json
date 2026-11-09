@@ -1,0 +1,11 @@
+{
+  "name": "clawchat-assessment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "eval:hidden": "node --test evals/hidden/*.test.mjs"
+  }
+}

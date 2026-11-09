@@ -1,0 +1,14 @@
+.git
+.next
+node_modules
+.env
+.env*.local
+coverage
+dist
+prisma/dev.db
+reports
+storage
+tmp
+*.tsbuildinfo
+*.log
+.DS_Store

@@ -1,0 +1,462 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InvitationStatus {
+  pending
+  opened
+  redeemed
+  cancelled
+  expired
+}
+
+enum AttemptStatus {
+  invited
+  opened
+  workspace_provisioning
+  in_progress
+  submitted
+  timed_out
+  evaluating
+  reviewed
+  failed
+}
+
+enum ArtifactKind {
+  git_diff
+  test_output
+  command_log
+  opencode_log
+  screenshot
+  file_tree
+  proctoring_recording
+  reviewer_export
+}
+
+model Organization {
+  id                String                 @id @default(cuid())
+  name              String
+  slug              String                 @unique
+  domain            String?
+  website           String?
+  hiringPlan        String?
+  onboardedAt       DateTime?
+  planName          String                 @default("Free trial")
+  evaluationCredits Int                    @default(5)
+  admins            AdminUser[]
+  templates         AssessmentTemplate[]
+  savedIdeas        SavedAssessmentIdea[]
+  invitations       Invitation[]
+  attempts          Attempt[]
+  interviewers      InterviewPanelMember[]
+  interviewBookings InterviewBooking[]
+  creditPurchases   CreditPurchase[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+}
+
+model AdminUser {
+  id               String       @id @default(cuid())
+  clerkUserId      String       @unique
+  email            String
+  name             String?
+  organizationRole String?
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  organizationId   String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model SavedAssessmentIdea {
+  id                   String       @id @default(cuid())
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  organizationId       String
+  ideaKey              String
+  title                String
+  summary              String
+  durationMin          Int
+  evaluationFocus      Json
+  deliverables         Json
+  roleTitle            String?
+  level                String       @default("Mid")
+  jobDescription       String?
+  assessmentPrompt     String?
+  assessmentMode       String       @default("solo")
+  repoSource           String       @default("generated")
+  repoUrl              String?
+  projectBrief         String?
+  existingProjectBrief String?
+  source               String       @default("fallback")
+  sourceReason         String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@index([organizationId, createdAt])
+}
+
+model Candidate {
+  id                String             @id @default(cuid())
+  email             String
+  name              String
+  invitations       Invitation[]
+  attempts          Attempt[]
+  interviewBookings InterviewBooking[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([email, name])
+}
+
+model AssessmentTemplate {
+  id               String       @id @default(cuid())
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  organizationId   String
+  title            String
+  roleTitle        String?
+  level            String       @default("SDE2")
+  durationMin      Int          @default(120)
+  // Optional. Null/empty → use the local task-template/ baseline that
+  // ships with the proofwork app image. Set to a github.com URL to
+  // git-clone real starter code instead. `proofwork-generated://...`
+  // is still recognized as a placeholder for backwards compatibility
+  // until existing rows are migrated to null.
+  repoUrl          String?
+  instructions     String
+  generatedFromJd  String?
+  taskBrief        String?
+  evaluationPlan   Json?
+  proctoringConfig Json?
+  rubric           Json
+  hiddenTestsRef   String?
+  isActive         Boolean      @default(true)
+  invitations      Invitation[]
+  attempts         Attempt[]
+  poolEntries      WorkspacePoolEntry[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model Invitation {
+  id               String                @id @default(cuid())
+  organization     Organization          @relation(fields: [organizationId], references: [id])
+  organizationId   String
+  template         AssessmentTemplate    @relation(fields: [templateId], references: [id])
+  templateId       String
+  candidate        Candidate             @relation(fields: [candidateId], references: [id])
+  candidateId      String
+  interviewer      InterviewPanelMember? @relation(fields: [interviewerId], references: [id])
+  interviewerId    String?
+  tokenHash        String                @unique
+  creditCost       Int                   @default(1)
+  creditChargedAt  DateTime?
+  proctoringConfig Json?
+  status           InvitationStatus      @default(pending)
+  expiresAt        DateTime
+  openedAt         DateTime?
+  redeemedAt       DateTime?
+  cancelledAt      DateTime?
+  attempt          Attempt?
+  interviewBooking InterviewBooking?
+  // Pre-warmed sandbox provisioned at invite-send time. Optional —
+  // attempts still fall through to the generic template pool / cold
+  // path when no per-invite sandbox exists.
+  poolEntry        WorkspacePoolEntry?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+}
+
+model InterviewPanelMember {
+  id                    String                  @id @default(cuid())
+  organization          Organization            @relation(fields: [organizationId], references: [id])
+  organizationId        String
+  name                  String
+  email                 String
+  title                 String?
+  timezone              String                  @default("Asia/Kolkata")
+  isActive              Boolean                 @default(true)
+  accessTokenHash       String?                 @unique
+  accessTokenExpiresAt  DateTime?
+  invitedAt             DateTime?
+  availabilityUpdatedAt DateTime?
+  lastAccessedAt        DateTime?
+  availability          InterviewAvailability[]
+  invitations           Invitation[]
+  bookings              InterviewBooking[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@unique([organizationId, email])
+  @@index([organizationId, isActive])
+}
+
+model InterviewAvailability {
+  id            String               @id @default(cuid())
+  panelMember   InterviewPanelMember @relation(fields: [panelMemberId], references: [id], onDelete: Cascade)
+  panelMemberId String
+  dayOfWeek     Int
+  startMinutes  Int
+  endMinutes    Int
+  timezone      String               @default("Asia/Kolkata")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([panelMemberId, dayOfWeek])
+}
+
+model InterviewBooking {
+  id             String               @id @default(cuid())
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  organizationId String
+  invitation     Invitation           @relation(fields: [invitationId], references: [id])
+  invitationId   String               @unique
+  candidate      Candidate            @relation(fields: [candidateId], references: [id])
+  candidateId    String
+  panelMember    InterviewPanelMember @relation(fields: [panelMemberId], references: [id])
+  panelMemberId  String
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  timezone       String               @default("Asia/Kolkata")
+  status         String               @default("scheduled")
+  meetingUrl     String
+  calendarUid    String               @unique
+  feedback       InterviewFeedback?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([panelMemberId, scheduledStart, scheduledEnd])
+  @@index([organizationId, scheduledStart])
+}
+
+model InterviewFeedback {
+  id                 String           @id @default(cuid())
+  booking            InterviewBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingId          String           @unique
+  interviewerId      String
+  attemptId          String?
+  technicalDepth     Int
+  productJudgment    Int
+  communication      Int
+  aiCollaboration    Int
+  hireRecommendation String
+  summary            String
+  strengths          String
+  concerns           String
+  followUps          String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([interviewerId])
+  @@index([attemptId])
+}
+
+model Attempt {
+  id             String             @id @default(cuid())
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  organizationId String
+  template       AssessmentTemplate @relation(fields: [templateId], references: [id])
+  templateId     String
+  candidate      Candidate          @relation(fields: [candidateId], references: [id])
+  candidateId    String
+  invitation     Invitation         @relation(fields: [invitationId], references: [id])
+  invitationId   String             @unique
+  status         AttemptStatus      @default(invited)
+  startedAt      DateTime?
+  submittedAt    DateTime?
+  timedOutAt     DateTime?
+  dueAt          DateTime?
+  finalNotes     String?
+  workspace         Workspace?
+  events            EventLog[]
+  artifacts         Artifact[]
+  evalRuns          EvalRun[]
+  scorecard         Scorecard?
+  proctoringUploads ProctoringUpload[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([status, dueAt])
+}
+
+enum ProctoringUploadKind {
+  camera
+  screen
+}
+
+enum ProctoringUploadStatus {
+  in_progress
+  complete
+  aborted
+}
+
+// Tracks an in-flight S3 multipart upload for a per-attempt
+// proctoring recording (camera or screen). Persists across browser
+// refreshes so the candidate's video stream isn't lost when their
+// tab reloads or the network blips mid-attempt — see
+// app/api/candidate/[token]/proctoring/recording/{init,part,part-complete,complete}.
+model ProctoringUpload {
+  id             String                 @id @default(cuid())
+  attempt        Attempt                @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId      String
+  kind           ProctoringUploadKind
+  r2Bucket       String
+  r2Key          String
+  r2UploadId     String
+  mimeType       String                 @default("video/webm")
+  // [{ partNumber, etag, bytes, uploadedAt }] — append-only as parts
+  // complete. Used at finalize time to send the CompleteMultipartUpload
+  // call, and at reviewer-side to surface timeline gaps without
+  // re-decoding the video.
+  partsCompleted Json                   @default("[]")
+  status         ProctoringUploadStatus @default(in_progress)
+  startedAt      DateTime               @default(now())
+  completedAt    DateTime?
+  artifactId     String?                @unique
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([attemptId, kind])
+  @@index([status, startedAt])
+}
+
+model Workspace {
+  id              String    @id @default(cuid())
+  attempt         Attempt   @relation(fields: [attemptId], references: [id])
+  attemptId       String    @unique
+  provider        String
+  externalId      String?
+  accessUrl       String?
+  opencodeUser    String?
+  opencodePass    String?
+  status          String    @default("provisioning")
+  lastHeartbeatAt DateTime?
+  expiresAt       DateTime?
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Pre-provisioned Daytona sandboxes kept warm per assessment template
+// so a candidate doesn't pay the 3-5min cold-start (git clone + npm
+// install + opencode boot). Pool refills on-demand after each assign;
+// stale entries (wrong commit SHA or expired) are reaped.
+enum PoolEntryStatus {
+  warming   // sandbox being created + setup steps running
+  idle      // ready to be assigned
+  assigning // claimed by an attempt, light per-candidate steps in flight
+  assigned  // serving an attempt
+  draining  // being destroyed (post-attempt or eviction)
+  failed    // warm or assign failed; reaper will clean up
+}
+
+model WorkspacePoolEntry {
+  id                String             @id @default(cuid())
+  template          AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId        String
+  externalId        String             @unique
+  repoCommitSha     String?
+  status            PoolEntryStatus    @default(warming)
+  // When set, this entry was pre-warmed at invite-send time and is
+  // reserved for that specific invitation. Claim logic prefers it
+  // over generic templateId entries on the matching attempt. Null
+  // means generic warm pool entry (any attempt of the template can
+  // claim it). @unique enforces 1:1 invite → sandbox.
+  invitation        Invitation?        @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+  invitationId      String?            @unique
+  assignedAttemptId String?            @unique
+  warmedAt          DateTime           @default(now())
+  readyAt           DateTime?
+  expiresAt         DateTime
+  lastHeartbeatAt   DateTime?
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([templateId, status])
+  @@index([invitationId, status])
+  @@index([status, expiresAt])
+}
+
+model EventLog {
+  id        String   @id @default(cuid())
+  attempt   Attempt  @relation(fields: [attemptId], references: [id])
+  attemptId String
+  type      String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([attemptId, createdAt])
+}
+
+model Artifact {
+  id        String       @id @default(cuid())
+  attempt   Attempt      @relation(fields: [attemptId], references: [id])
+  attemptId String
+  kind      ArtifactKind
+  label     String
+  uri       String
+  metadata  Json?
+  createdAt DateTime     @default(now())
+}
+
+model EvalRun {
+  id           String   @id @default(cuid())
+  attempt      Attempt  @relation(fields: [attemptId], references: [id])
+  attemptId    String
+  status       String
+  visibleTests Json?
+  hiddenTests  Json?
+  llmRubric    Json?
+  summary      String?
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Scorecard {
+  id                    String    @id @default(cuid())
+  attempt               Attempt   @relation(fields: [attemptId], references: [id])
+  attemptId             String    @unique
+  requirements          Int
+  testAndEvalQuality    Int
+  debuggingDiscipline   Int
+  codeQuality           Int
+  aiCollaboration       Int
+  productionReadiness   Int
+  communication         Int
+  automatedSummary      String
+  reviewerNotes         String?
+  reviewerOverrideScore Int?
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model CreditPurchase {
+  id                String       @id @default(cuid())
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  organizationId    String
+  packId            String
+  packName          String
+  credits           Int
+  amountPaise       Int
+  currency          String       @default("INR")
+  status            String       @default("pending")
+  razorpayOrderId   String       @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  metadata          Json?
+  paidAt            DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([status])
+}
