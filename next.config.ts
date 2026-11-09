@@ -17,10 +17,11 @@ const nextConfig: NextConfig = {
   // Explicitly include both so the standalone bundle has them at the
   // same project-root-relative path the source code expects.
   outputFileTracingIncludes: {
-    "/**/*": ["./app/globals.css", "./task-template/**/*"]
+    "/**/*": ["./app/globals.css", "./app/styles/**/*", "./task-template/**/*"]
   },
   serverExternalPackages: ["mammoth", "pdf-parse", "pdfkit"],
-  typedRoutes: true
+  typedRoutes: true,
+  devIndicators: false
 };
 
 export default nextConfig;

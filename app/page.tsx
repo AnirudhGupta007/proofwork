@@ -87,8 +87,8 @@ const pricingPlans = [
     name: "Volume",
     price: "$39-$49",
     detail: "per assessment in prepaid packs",
-    cta: "Talk to sales",
-    href: "mailto:reports@example.com?subject=Proofwork%20volume%20pricing",
+    cta: "Request volume pricing",
+    href: "/sign-up",
     featured: false,
     features: ["50+ assessment packs", "Role-based task generation", "Reviewer seats", "ATS and retention controls"]
   }
@@ -150,13 +150,13 @@ export default function Home() {
         </nav>
 
         <div className="home-hero-copy">
-          <p className="eyebrow">AI-native work trials</p>
+          <p className="eyebrow">Hire on proof of work</p>
           <h1>
-            Stop hiring for whiteboard memory. <em>Test how people actually build now.</em>
+            Skip the whiteboard. <em>Hire on proof of work.</em>
           </h1>
           <p>
-            Proofwork replaces live coding rounds with realistic, async product tasks in a hosted dev workspace. Candidates plan,
-            build, test, use AI, commit work, and leave a complete evidence trail for reviewers.
+            Proofwork replaces live coding rounds with real, async product tasks in a hosted dev workspace. Candidates plan, build,
+            test, work with AI, and commit, leaving a complete evidence trail your reviewers can actually read.
           </p>
           <div className="home-hero-actions">
             <Link className="button" href="#pricing">
@@ -172,7 +172,9 @@ export default function Home() {
       <section className="home-band home-belief">
         <div className="home-section-heading">
           <p className="eyebrow">The old signal is fading</p>
-          <h2>DSA puzzles are a narrow proxy for a much bigger job.</h2>
+          <h2>
+            Puzzles are a narrow proxy for a <em>much bigger job.</em>
+          </h2>
         </div>
         <div className="home-belief-grid">
           <div>
@@ -198,7 +200,9 @@ export default function Home() {
       <section className="home-band" id="signals">
         <div className="home-section-heading">
           <p className="eyebrow">What Proofwork scores</p>
-          <h2>The assessment is the work loop.</h2>
+          <h2>
+            The assessment <em>is</em> the work loop.
+          </h2>
           <p>
             The best signal comes from watching the whole loop: intent, plan, build, verify, debug, communicate. Not one isolated
             coding trick.
@@ -236,7 +240,9 @@ export default function Home() {
       <section className="home-band home-report-section" id="report">
         <div className="home-report-copy">
           <p className="eyebrow">Evidence over vibes</p>
-          <h2>A reviewer report that explains the hire/no-hire call.</h2>
+          <h2>
+            A reviewer report that <em>explains</em> the call.
+          </h2>
           <p>
             Each attempt produces a PDF-ready scorecard with candidate details, role, section scores, tests, hidden evals, commits,
             AI collaboration traces, timeline, proctoring events, and reviewer override.
@@ -257,7 +263,7 @@ export default function Home() {
           <div className="home-report-card-header">
             <div>
               <span className="home-mini-label">Candidate</span>
-              <strong>Riya Sharma</strong>
+              <strong>Candidate A</strong>
               <small>Product engineer · AI workflow assessment</small>
             </div>
             <span className="status amber">Lean no hire</span>
@@ -315,10 +321,12 @@ export default function Home() {
 
       <section className="home-final">
         <Sparkles size={22} />
-        <h2>Hiring for the AI era should feel closer to a trial project than a trivia night.</h2>
+        <h2>
+          Less trivia night. <em>More trial project.</em>
+        </h2>
         <p>
-          Proofwork gives candidates room to show real judgment and gives hiring teams structured evidence without burning
-          interviewer hours.
+          Give candidates room to show real judgment, and give your hiring team structured evidence without burning interviewer
+          hours.
         </p>
         <Link className="button" href="#pricing">
           Start with 5 free assessments <ArrowRight size={16} />

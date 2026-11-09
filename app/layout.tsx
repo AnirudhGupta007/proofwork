@@ -1,14 +1,21 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { env } from "@/app/lib/env";
 
-const globalStyles = readFileSync(path.join(process.cwd(), "app/globals.css"), "utf8");
+const stylesDir = path.join(process.cwd(), "app/styles");
+const featureStyles = existsSync(stylesDir)
+  ? readdirSync(stylesDir)
+      .filter((file) => file.endsWith(".css"))
+      .sort()
+      .map((file) => readFileSync(path.join(stylesDir, file), "utf8"))
+  : [];
+const globalStyles = [readFileSync(path.join(process.cwd(), "app/globals.css"), "utf8"), ...featureStyles].join("\n");
 
 export const metadata: Metadata = {
   title: "Proofwork",
-  description: "AI-native real-world work trials with hosted dev workspaces, evals, and reviewer reports."
+  description: "Hire on proof of work: real-world AI-era work trials with hosted dev workspaces, evals, and reviewer reports."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -28,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link
-            href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&display=swap"
             rel="stylesheet"
           />
           <style dangerouslySetInnerHTML={{ __html: globalStyles }} />

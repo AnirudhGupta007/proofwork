@@ -40,9 +40,9 @@ export function buildInterviewerInviteEmail(input: InterviewerInviteEmailInput) 
         "You control your weekly interview windows. Candidates can book only open slots; already-booked times are automatically hidden."
       )}
       <div style="margin-top:28px;">${ctaButton("Set availability", input.accessUrl)}</div>
-      <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#555555;">If the button does not work, paste this link into your browser:<br /><a href="${escapeHtml(
+      <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#4A4D48;">If the button does not work, paste this link into your browser:<br /><a href="${escapeHtml(
         input.accessUrl
-      )}" style="color:#1a1a1a;text-decoration:underline;word-break:break-all;">${escapeHtml(input.accessUrl)}</a></p>
+      )}" style="color:#0A0B0A;text-decoration:underline;word-break:break-all;">${escapeHtml(input.accessUrl)}</a></p>
     `,
     footerNote: "This link lets you manage interview availability only. It does not expose candidate reports or admin settings."
   });

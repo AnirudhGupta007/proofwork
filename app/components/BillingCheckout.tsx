@@ -90,7 +90,7 @@ export function BillingCheckout({ packs, currentCredits }: { packs: CreditPack[]
           purchaseId: order.purchaseId,
           organizationName: order.organizationName
         },
-        theme: { color: "#111111" },
+        theme: { color: "#1E4D3A" },
         handler: async (response) => {
           const verifyResponse = await fetch("/api/admin/billing/razorpay-verify", {
             method: "POST",

@@ -1,15 +1,32 @@
+// Proofwork brand palette for Clerk's hosted components (dark theme).
+const bg = "#0A0B0A";
+const ink = "#F5F1E6";
+const muted = "rgba(245, 241, 230, 0.62)";
+const line = "rgba(245, 241, 230, 0.12)";
+const lineStrong = "rgba(245, 241, 230, 0.28)";
+const inputBg = "rgba(245, 241, 230, 0.04)";
+const accent = "#1E4D3A";
+const accentStrong = "#245C45";
+const accentTint = "#8CC2A4";
+const bodyFont = "\"Instrument Sans\", ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+const displayFont = "\"Instrument Serif\", Georgia, serif";
+
 export const clerkAppearance = {
   variables: {
-    colorPrimary: "#1a1a1a",
-    colorBackground: "#ffffff",
-    colorText: "#1a1a1a",
-    colorTextSecondary: "#555555",
-    colorNeutral: "#555555",
-    colorInputBackground: "#ffffff",
-    colorInputText: "#1a1a1a",
-    borderRadius: "0px",
-    fontFamily: "\"Space Grotesk\", Arial, Helvetica, sans-serif",
-    fontFamilyButtons: "\"Space Grotesk\", Arial, Helvetica, sans-serif"
+    colorPrimary: accent,
+    colorBackground: bg,
+    colorText: ink,
+    colorTextSecondary: muted,
+    colorTextOnPrimaryBackground: ink,
+    colorNeutral: ink,
+    colorInputBackground: inputBg,
+    colorInputText: ink,
+    colorDanger: "#D98C80",
+    colorSuccess: accentTint,
+    colorWarning: "#D2B072",
+    borderRadius: "4px",
+    fontFamily: bodyFont,
+    fontFamilyButtons: bodyFont
   },
   elements: {
     rootBox: {
@@ -18,44 +35,48 @@ export const clerkAppearance = {
     cardBox: {
       width: "100%",
       boxShadow: "none",
-      borderRadius: "0",
-      border: "1px solid #dedbd2",
+      borderRadius: "4px",
+      border: `1px solid ${line}`,
       padding: "0",
-      backgroundColor: "#ffffff"
+      backgroundColor: bg
     },
     card: {
       boxShadow: "none",
       borderRadius: "0",
-      backgroundColor: "#ffffff",
+      backgroundColor: bg,
       border: "0",
       padding: "0"
     },
     headerTitle: {
-      fontFamily: "\"Instrument Serif\", Georgia, serif",
+      fontFamily: displayFont,
       fontSize: "34px",
       fontWeight: "400",
-      letterSpacing: "0",
-      color: "#1a1a1a"
+      letterSpacing: "-0.01em",
+      color: ink
     },
     headerSubtitle: {
-      color: "#555555",
+      color: muted,
       fontSize: "14px"
     },
     socialButtonsBlockButton: {
-      borderRadius: "0",
-      borderColor: "#dedbd2",
+      borderRadius: "4px",
+      borderColor: lineStrong,
+      backgroundColor: "transparent",
       boxShadow: "none",
-      color: "#1a1a1a"
+      color: ink
+    },
+    socialButtonsBlockButtonText: {
+      color: ink
     },
     dividerLine: {
-      backgroundColor: "#dedbd2"
+      backgroundColor: line
     },
     dividerText: {
-      color: "#555555"
+      color: muted
     },
     formFieldLabel: {
-      color: "#1a1a1a",
-      fontWeight: "600"
+      color: ink,
+      fontWeight: "500"
     },
     formField: {
       width: "100%"
@@ -71,37 +92,55 @@ export const clerkAppearance = {
       width: "100%"
     },
     formFieldInput: {
-      borderRadius: "0",
-      borderColor: "#dedbd2",
+      borderRadius: "4px",
+      borderColor: lineStrong,
+      backgroundColor: inputBg,
       boxShadow: "none",
-      color: "#1a1a1a",
+      color: ink,
       width: "100%",
       minHeight: "42px",
       padding: "0 12px"
     },
     formButtonPrimary: {
-      borderRadius: "0",
-      backgroundColor: "#1a1a1a",
+      borderRadius: "4px",
+      backgroundColor: accent,
       boxShadow: "none",
-      color: "#ffffff",
-      fontWeight: "700"
+      color: ink,
+      fontWeight: "500",
+      "&:hover": {
+        backgroundColor: accentStrong
+      }
     },
     footer: {
       borderRadius: "0",
-      backgroundColor: "#f6f5f1"
+      background: bg,
+      backgroundColor: bg
+    },
+    footerActionText: {
+      color: muted
     },
     footerActionLink: {
-      color: "#1a1a1a",
-      fontWeight: "700"
+      color: accentTint,
+      fontWeight: "600"
     },
     identityPreview: {
-      borderRadius: "0",
-      borderColor: "#dedbd2",
-      backgroundColor: "#f6f5f1"
+      borderRadius: "4px",
+      borderColor: line,
+      backgroundColor: inputBg
+    },
+    identityPreviewText: {
+      color: ink
+    },
+    identityPreviewEditButton: {
+      color: accentTint
+    },
+    formResendCodeLink: {
+      color: accentTint
     },
     otpCodeFieldInput: {
-      borderRadius: "0",
-      borderColor: "#dedbd2",
+      borderRadius: "4px",
+      borderColor: lineStrong,
+      color: ink,
       boxShadow: "none"
     }
   }

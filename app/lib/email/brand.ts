@@ -3,16 +3,16 @@ export const emailBrand = {
   parent: "Proofwork",
   wordmark: "Proofwork",
   signature: "Proofwork",
-  bg: "#fbfaf7",
+  bg: "#F5F1E6",
   panel: "#ffffff",
-  ink: "#1a1a1a",
-  muted: "#555555",
-  soft: "#f6f5f1",
-  line: "#dedbd2",
-  success: "#1a1a1a",
+  ink: "#0A0B0A",
+  muted: "#4A4D48",
+  soft: "#ECE7D8",
+  line: "#D9D3C2",
+  success: "#1E4D3A",
   warning: "#8a5a00",
   danger: "#9f1d1d",
-  fontBody: "'Space Grotesk', Arial, Helvetica, sans-serif",
+  fontBody: "'Instrument Sans', Arial, Helvetica, sans-serif",
   fontDisplay: "'Instrument Serif', Georgia, 'Times New Roman', serif"
 };
 

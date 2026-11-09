@@ -51,7 +51,7 @@ export function buildInviteEmail(input: InviteEmailInput) {
     preheader: `Your ${displayAssessmentTitle} invite expires ${expires}.`,
     eyebrow: "Candidate assessment",
     title: "Show us how you build.",
-    intro: `Hi ${candidateName}, you have been invited to complete <strong style="color:#1a1a1a;">${escapeHtml(displayAssessmentTitle)}</strong>. This is a real-world work simulation, not a whiteboard puzzle.`,
+    intro: `Hi ${candidateName}, you have been invited to complete <strong style="color:#0A0B0A;">${escapeHtml(displayAssessmentTitle)}</strong>. This is a real-world work simulation, not a whiteboard puzzle.`,
     body: `
       ${metadataTable([
         ["Candidate", input.candidateName],
@@ -63,7 +63,7 @@ export function buildInviteEmail(input: InviteEmailInput) {
         "You will work inside a hosted coding environment with OpenCode, a terminal, browser preview, and proctoring checks. Start when you have uninterrupted time and a desktop browser available."
       )}
       <div style="margin-top:28px;">${ctaButton("Open assessment", inviteUrl)}</div>
-      <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#555555;">If the button does not work, paste this link into your browser:<br /><a href="${escapedInviteUrl}" style="color:#1a1a1a;text-decoration:underline;word-break:break-all;">${escapedInviteUrl}</a></p>
+      <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#4A4D48;">If the button does not work, paste this link into your browser:<br /><a href="${escapedInviteUrl}" style="color:#0A0B0A;text-decoration:underline;word-break:break-all;">${escapedInviteUrl}</a></p>
     `,
     footerNote: "This is a single-use invite. Candidate accounts are not required for this assessment link."
   });

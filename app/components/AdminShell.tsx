@@ -1,7 +1,21 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ClipboardCheck, CreditCard, FileText, Gauge, Library, MailPlus, Users } from "lucide-react";
 
+const navItems = [
+  { href: "/admin", label: "Dashboard", icon: Gauge, exact: true },
+  { href: "/admin/invitations", label: "Invitations", icon: MailPlus },
+  { href: "/admin/assessments", label: "Assessments", icon: Library },
+  { href: "/admin/interviewers", label: "Interview panel", icon: Users },
+  { href: "/admin/reports", label: "Reports", icon: FileText },
+  { href: "/admin/billing", label: "Billing", icon: CreditCard }
+] as const;
+
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() ?? "";
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -12,24 +26,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <span>Proofwork</span>
         </div>
         <nav className="nav" aria-label="Admin navigation">
-          <Link href="/admin">
-            <Gauge size={16} /> Dashboard
-          </Link>
-          <Link href="/admin/invitations">
-            <MailPlus size={16} /> Invitations
-          </Link>
-          <Link href="/admin/assessments">
-            <Library size={16} /> Assessments
-          </Link>
-          <Link href="/admin/interviewers">
-            <Users size={16} /> Interview panel
-          </Link>
-          <Link href="/admin/reports">
-            <FileText size={16} /> Reports
-          </Link>
-          <Link href="/admin/billing">
-            <CreditCard size={16} /> Billing
-          </Link>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active =
+              "exact" in item && item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link aria-current={active ? "page" : undefined} className={active ? "active" : undefined} href={item.href} key={item.href}>
+                <Icon size={16} /> {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
       <main className="main">{children}</main>
