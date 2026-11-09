@@ -3,7 +3,7 @@ import { z } from "zod";
 const serverEnvSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   ASSESSMENT_TASK_REPO_URL: z.string().url().optional(),
-  INVITE_EMAIL_FROM: z.string().default("Proofwork <assessments@example.com>"),
+  INVITE_EMAIL_FROM: z.string().default("Proofwork <noreply@example.com>"),
   CANDIDATE_REPORT_EMAIL_TO: z.string().email().default("reports@example.com"),
   // Local FS fallback for proctoring recordings used when R2_* env is
   // unset (local dev without R2 creds). In dev/stage/prod the pod's

@@ -62,7 +62,7 @@ async function main() {
   const to = process.argv[2] ?? "reports@example.com";
   const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3001";
   const resendKey = env("RESEND_API_KEY");
-  const from = env("INVITE_EMAIL_FROM") || "Proofwork <onboarding@resend.dev>";
+  const from = env("INVITE_EMAIL_FROM") || "Proofwork <noreply@example.com>";
   const resend = resendKey ? new Resend(resendKey) : null;
 
   const organization = await db.organization.findFirst({ where: { slug: "demo" } });
